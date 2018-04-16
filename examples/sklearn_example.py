@@ -2,7 +2,7 @@ from __future__ import print_function
 from __future__ import division
 
 from sklearn.datasets import make_classification
-from sklearn.cross_validation import cross_val_score
+from sklearn.model_selection import cross_val_score
 from sklearn.ensemble import RandomForestClassifier as RFC
 from sklearn.svm import SVC
 
@@ -16,13 +16,15 @@ data, target = make_classification(
     n_redundant=7
 )
 
+
 def svccv(C, gamma):
     val = cross_val_score(
         SVC(C=C, gamma=gamma, random_state=2),
-        data, target, 'f1', cv=2
+        data, target, scoring='f1', cv=2
     ).mean()
 
     return val
+
 
 def rfccv(n_estimators, min_samples_split, max_features):
     val = cross_val_score(
@@ -30,23 +32,24 @@ def rfccv(n_estimators, min_samples_split, max_features):
             min_samples_split=int(min_samples_split),
             max_features=min(max_features, 0.999),
             random_state=2
-        ),
-        data, target, 'f1', cv=2
+            ),
+        data, target, scoring='f1', cv=2
     ).mean()
     return val
+
 
 if __name__ == "__main__":
     gp_params = {"alpha": 1e-5}
 
     svcBO = BayesianOptimization(svccv,
-        {'C': (0.001, 100), 'gamma': (0.0001, 0.1)})
+                                 {'C': (0.001, 100), 'gamma': (0.0001, 0.1)})
     svcBO.explore({'C': [0.001, 0.01, 0.1], 'gamma': [0.001, 0.01, 0.1]})
 
     rfcBO = BayesianOptimization(
         rfccv,
         {'n_estimators': (10, 250),
-        'min_samples_split': (2, 25),
-        'max_features': (0.1, 0.999)}
+         'min_samples_split': (2, 25),
+         'max_features': (0.1, 0.999)}
     )
 
     svcBO.maximize(n_iter=10, **gp_params)

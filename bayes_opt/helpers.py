@@ -3,7 +3,10 @@ from __future__ import division
 import numpy as np
 from datetime import datetime
 from scipy.stats import norm
-from scipy.optimize import minimize
+from scipy.optimize import differential_evolution
+
+
+# from scipy.optimize import minimize
 
 
 def acq_max(ac, gp, y_max, bounds, random_state, n_warmup=100000, n_iter=250):
@@ -41,7 +44,6 @@ def acq_max(ac, gp, y_max, bounds, random_state, n_warmup=100000, n_iter=250):
     -------
     :return: x_max, The arg max of the acquisition function.
     """
-
     # Warm up with random points
     x_tries = random_state.uniform(bounds[:, 0], bounds[:, 1],
                                    size=(n_warmup, bounds.shape[0]))
@@ -49,24 +51,30 @@ def acq_max(ac, gp, y_max, bounds, random_state, n_warmup=100000, n_iter=250):
     x_max = x_tries[ys.argmax()]
     max_acq = ys.max()
 
-    # Explore the parameter space more throughly
-    x_seeds = random_state.uniform(bounds[:, 0], bounds[:, 1],
-                                   size=(n_iter, bounds.shape[0]))
-    for x_try in x_seeds:
-        # Find the minimum of minus the acquisition function
-        res = minimize(lambda x: -ac(x.reshape(1, -1), gp=gp, y_max=y_max),
-                       x_try.reshape(1, -1),
-                       bounds=bounds,
-                       method="L-BFGS-B")
+    # # Explore the parameter space more throughly
+    # x_seeds = random_state.uniform(bounds[:, 0], bounds[:, 1],
+    #                                size=(n_iter, bounds.shape[0]))
+    # for x_try in x_seeds:
+    #     # Find the minimum of minus the acquisition function
+    #     res = minimize(lambda x: -ac(x.reshape(1, -1), gp=gp, y_max=y_max),
+    #                    x_try.reshape(1, -1),
+    #                    bounds=bounds,
+    #                    method="L-BFGS-B")
+    #
+    #     # See if success
+    #     if not res.success:
+    #         continue
+    #
+    #     # Store it if better than previous minimum(maximum).
+    #     if max_acq is None or -res.fun[0] >= max_acq:
+    #         x_max = res.x
+    #         max_acq = -res.fun[0]
 
-        # See if success
-        if not res.success:
-            continue
-           
-        # Store it if better than previous minimum(maximum).
-        if max_acq is None or -res.fun[0] >= max_acq:
-            x_max = res.x
-            max_acq = -res.fun[0]
+    res = differential_evolution(lambda x: -ac(x.reshape(1, -1), gp=gp, y_max=y_max), bounds=bounds)
+    res_max_acq = res.fun[0] if isinstance(res.fun, np.ndarray) else res.fun
+
+    if res.success and res_max_acq >= max_acq:
+        x_max = res.x
 
     # Clip output to make sure it lies within the bounds. Due to floating
     # point technicalities this is not always the case.
@@ -110,13 +118,13 @@ class UtilityFunction(object):
     @staticmethod
     def _ei(x, gp, y_max, xi):
         mean, std = gp.predict(x, return_std=True)
-        z = (mean - y_max - xi)/std
+        z = (mean - y_max - xi) / std
         return (mean - y_max - xi) * norm.cdf(z) + std * norm.pdf(z)
 
     @staticmethod
     def _poi(x, gp, y_max, xi):
         mean, std = gp.predict(x, return_std=True)
-        z = (mean - y_max - xi)/std
+        z = (mean - y_max - xi) / std
         return norm.cdf(z)
 
 
@@ -201,7 +209,7 @@ class PrintLog(object):
                                                      BColours.ENDC))
 
         print(BColours.BLUE + "-" * (29 + sum([s + 5 for s in self.sizes])) +
-            BColours.ENDC)
+              BColours.ENDC)
 
         print("{0:>{1}}".format("Step", 5), end=" | ")
         print("{0:>{1}}".format("Time", 6), end=" | ")
@@ -230,12 +238,12 @@ class PrintLog(object):
 
             for index in self.sorti:
                 print("{0}{2: >{3}.{4}f}{1}".format(
-                            BColours.GREEN, BColours.ENDC,
-                            x[index],
-                            self.sizes[index] + 2,
-                            min(self.sizes[index] - 3, 6 - 2)
-                        ),
-                      end=" | ")
+                    BColours.GREEN, BColours.ENDC,
+                    x[index],
+                    self.sizes[index] + 2,
+                    min(self.sizes[index] - 3, 6 - 2)
+                ),
+                    end=" | ")
         else:
             print("{: >10.5f}".format(y), end=" | ")
             for index in self.sorti:

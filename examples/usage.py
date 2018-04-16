@@ -48,7 +48,7 @@ gp_params = {'kernel': None,
              'alpha': 1e-5}
 
 # Run it again with different acquisition function
-bo.maximize(n_iter=5, acq='ei', **gp_params)
+bo.maximize(n_iter=5, acq='ucb', **gp_params)
 
 # Finally, we take a look at the final results.
 print(bo.res['max'])
