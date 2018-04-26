@@ -110,7 +110,7 @@ class TargetSpace(object):
 
     def observe_point(self, x):
         """
-        Evaulates a single point x, to obtain the value y and then records them
+        Evaluates a single point x, to obtain the value y and then records them
         as observations.
 
         Notes

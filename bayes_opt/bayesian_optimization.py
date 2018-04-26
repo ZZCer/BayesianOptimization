@@ -5,13 +5,14 @@ import numpy as np
 import warnings
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern
+import inspect
 from .helpers import (UtilityFunction, PrintLog, acq_max, ensure_rng)
 from .target_space import TargetSpace
 
 
 class BayesianOptimization(object):
 
-    def __init__(self, f, pbounds, random_state=None, verbose=1):
+    def __init__(self, f, pbounds, random_state=None, verbose=1, cost_function=None):
         """
         :param f:
             Function to be maximized.
@@ -22,6 +23,11 @@ class BayesianOptimization(object):
 
         :param verbose:
             Whether or not to print progress.
+
+        :param cost_function:
+            The cost function of f, proportional to the (appox) running time of f,
+            should have exact same parameter list with f.
+            This function should fairly cheap to evaluate.
 
         """
         # Store the original dictionary
@@ -70,6 +76,11 @@ class BayesianOptimization(object):
 
         # Verbose
         self.verbose = verbose
+
+        # Cost function
+        if cost_function is not None:
+            assert(inspect.getfullargspec(f).args == inspect.getfullargspec(cost_function))
+        self.cost_function = cost_function
 
     def init(self, init_points):
         """
@@ -197,6 +208,7 @@ class BayesianOptimization(object):
                  acq='ei',
                  kappa=2.576,
                  xi=0.0,
+                 n_jobs=1,
                  **gp_params):
         """
         Main optimization method.
@@ -214,7 +226,21 @@ class BayesianOptimization(object):
             sampled must be specified.
 
         :param acq:
-            Acquisition function to be used, defaults to Upper Confidence Bound.
+            Acquisition function to be used, defaults to Expected Improvement.
+
+        :param n_jobs:
+            Maximum experiments on f that we can run in parallel.
+
+            Main optimization function with parallel evaluation enabled
+            when n_jobs > 1. This method enables parallel evaluation via
+            batch Bayesian Optimization, which picks multiple samples per
+            iteration. The target function f should be thread-safe to use
+            this parallel method.
+
+            Here're some methods available for picking samples according to
+            the acquisition function:
+            - q-EI method
+            - Iterative maximize method
 
         :param gp_params:
             Parameters to be passed to the Scikit-learn Gaussian Process object
@@ -251,7 +277,13 @@ class BayesianOptimization(object):
         self.gp.fit(self.space.X, self.space.Y)
 
         # Finding argmax of the acquisition function.
-        x_max = acq_max(ac=self.util.utility,
+        def ac(x, gp, y_max):
+            x_ = np.asarray(x).ravel()
+            params = dict(zip(self.space.keys, x_))
+            return self.util.utility(x, gp, y_max) / (
+                self.cost_function(**params) if self.cost_function is not None else 1)
+
+        x_max = acq_max(ac=ac,
                         gp=self.gp,
                         y_max=y_max,
                         bounds=self.space.bounds,
